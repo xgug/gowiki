@@ -15,17 +15,17 @@ type Page struct {
 	Body  []byte
 }
 
-var templates = template.Must(template.ParseFiles("edit.html", "view.html"))
+var templates = template.Must(template.ParseFiles("tmpl/edit.html", "tmpl/view.html"))
 var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
 
 func (p *Page) save() error {
-	filenmae := p.Title + ".txt"
+	filenmae := "data/" + p.Title + ".txt"
 
 	return ioutil.WriteFile(filenmae, p.Body, 0600)
 }
 
 func loadPage(title string) (*Page, error)  {
-	filename := title + ".txt"
+	filename := "data/" + title + ".txt"
 	body, err := ioutil.ReadFile(filename)
 
 	if err != nil {
@@ -40,6 +40,7 @@ func handler(w http.ResponseWriter, r *http.Request)  {
 }
 
 func viewHandler(w http.ResponseWriter, r *http.Request, title string)  {
+
 	p, err := loadPage(title)
 	if err != nil {
 		http.Redirect(w, r, "/edit/" + title, http.StatusFound)
@@ -71,8 +72,12 @@ func saveHandler(w http.ResponseWriter, r *http.Request, title string)  {
 	http.Redirect(w, r, "/view/" + title, http.StatusFound)
 }
 
+func homeHandler(w http.ResponseWriter, r *http.Request, title string)  {
+	http.Redirect(w, r, "/view/FrontPage", http.StatusFound)
+}
+
 func renderTemplate(w http.ResponseWriter, tmpl string, p *Page)  {
-	err := templates.ExecuteTemplate(w, tmpl+".html", p)
+	err := templates.ExecuteTemplate(w, tmpl + ".html", p)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -92,13 +97,20 @@ func getTitle(w http.ResponseWriter, r *http.Request) (string, error)  {
 
 func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		m := validPath.FindStringSubmatch(r.URL.Path)
-		if m == nil {
-			http.NotFound(w, r)
+
+		if r.URL.Path != "/" {
+			m := validPath.FindStringSubmatch(r.URL.Path)
+			if m == nil {
+				http.NotFound(w, r)
+				return
+			}
+
+			fn(w, r, m[2])
+
 			return
 		}
 
-		fn(w, r, m[2])
+		fn(w, r, "")
 	}
 }
 
@@ -111,5 +123,6 @@ func main()  {
 	http.HandleFunc("/view/", makeHandler(viewHandler))
 	http.HandleFunc("/edit/", makeHandler(editHandler))
 	http.HandleFunc("/save/", makeHandler(saveHandler))
+	http.HandleFunc("/", makeHandler(homeHandler))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
